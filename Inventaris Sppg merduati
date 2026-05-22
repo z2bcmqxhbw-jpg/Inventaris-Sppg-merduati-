@@ -1,0 +1,55 @@
+const SS = SpreadsheetApp.getActiveSpreadsheet();
+
+function doPost(e) {
+  try {
+    const data = JSON.parse(e.postData.contents);
+    const ts = new Date().toLocaleString("id-ID");
+
+    if (data.tipe === "masuk") {
+      const sh = SS.getSheetByName("BARANG_MASUK");
+      sh.appendRow([sh.getLastRow(), ts, data.nama, data.jumlah, data.satuan, data.kondisi, data.sumber||"-", data.catatan||"-"]);
+      updateStok(data.nama, data.satuan, Number(data.jumlah), 0);
+    }
+
+    if (data.tipe === "keluar") {
+      const sh = SS.getSheetByName("BARANG_KELUAR");
+      sh.appendRow([sh.getLastRow(), ts, data.nama, data.jumlah, data.satuan, data.kondisi, data.tujuan||"-", data.catatan||"-"]);
+      updateStok(data.nama, data.satuan, 0, Number(data.jumlah));
+    }
+
+    if (data.tipe === "getAll") {
+      const s1 = SS.getSheetByName("STOCK_BARANG").getDataRange().getValues();
+      const s2 = SS.getSheetByName("BARANG_MASUK").getDataRange().getValues();
+      const s3 = SS.getSheetByName("BARANG_KELUAR").getDataRange().getValues();
+      return ContentService.createTextOutput(JSON.stringify({
+        status:"ok",
+        stok: s1.slice(1).filter(r=>r[0]).map(r=>({nama:r[0],satuan:r[1],stok:r[2],masuk:r[3],keluar:r[4]})),
+        masuk: s2.slice(1).filter(r=>r[0]).map(r=>({no:r[0],ts:r[1],nama:r[2],jumlah:r[3],satuan:r[4],kondisi:r[5],sumber:r[6],catatan:r[7]})),
+        keluar: s3.slice(1).filter(r=>r[0]).map(r=>({no:r[0],ts:r[1],nama:r[2],jumlah:r[3],satuan:r[4],kondisi:r[5],tujuan:r[6],catatan:r[7]}))
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    return ContentService.createTextOutput(JSON.stringify({status:"ok"})).setMimeType(ContentService.MimeType.JSON);
+  } catch(err) {
+    return ContentService.createTextOutput(JSON.stringify({status:"error",msg:err.toString()})).setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+function updateStok(nama, satuan, masuk, keluar) {
+  const sh = SS.getSheetByName("STOCK_BARANG");
+  const rows = sh.getDataRange().getValues();
+  for (let i = 1; i < rows.length; i++) {
+    if (rows[i][0] === nama) {
+      sh.getRange(i+1,3).setValue(Number(rows[i][2])+masuk-keluar);
+      sh.getRange(i+1,4).setValue(Number(rows[i][3])+masuk);
+      sh.getRange(i+1,5).setValue(Number(rows[i][4])+keluar);
+      sh.getRange(i+1,6).setValue(new Date().toLocaleString("id-ID"));
+      return;
+    }
+  }
+  sh.appendRow([nama, satuan, masuk-keluar, masuk, keluar, new Date().toLocaleString("id-ID")]);
+}
+
+function doGet() {
+  return ContentService.createTextOutput(JSON.stringify({status:"ok",pesan:"Server aktif"})).setMimeType(ContentService.MimeType.JSON);
+}
